@@ -2,7 +2,7 @@
 The Krunker client is an installable, desktop-based version of Krunker.io for Windows, Apple Mac and Linux computers. It allows users to run and play Krunker outside of their browser, as long as your system can run Krunker through the browser, you should expect the client to do the same.  An internet connection is a requirement to run and play in the Krunker.io client.
 
 To Build
-To clone and run this repository you'll need Git and Node.js (which comes with npm) installed on your computer. From your command line:
+First and foremost you'll need Git and Node.js (which comes with npm) installed on your computer. From your command line:
 
 # Clone this repository
 git clone https://github.com/skidlamer/Official-Krunker.io-Client.git
