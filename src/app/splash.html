@@ -1,0 +1,86 @@
+<html>
+	<head>
+		<title>Krunker</title>
+		<style>
+			body {
+				pointer-events: none;
+				text-align: center;
+				z-index: 1;
+				background-image: url("imgs/newsplash_1.png");
+				background-size: contain;
+				border: 6px solid rgba(0, 0, 0, 0.2);
+				border-radius: 6px;
+				position: absolute;
+				top: 0;
+				right: 0;
+				bottom: 0;
+				left: 0;
+				margin: 0;
+			}
+
+			@font-face {
+				font-family: 'GameFont';
+				src: url('fonts/krunker.ttf');
+			}
+
+			* {
+				outline: none;
+				font-family: 'GameFont';
+				font-size: 12px;
+				user-select: none;
+
+				text-shadow:
+					-1px -1px 0 #202020,
+					1px -1px 0 #202020,
+					-1px 1px 0 #202020,
+					1px 1px 0 #202020,
+					-2px -2px 0 #202020,
+					2px -2px 0 #202020,
+					-2px 2px 0 #202020,
+					2px 2px 0 #202020;
+			}
+		</style>
+	</head>
+	<body>
+		<div id="update" style="position:absolute;color:white;bottom:10px;left:10px;fontSize:20px;"></div>
+		<div id="curr" style="position:absolute;color:white;bottom:10px;right:10px;fontSize:20px;"></div>
+		<script>
+			const { ipcRenderer, remote } = require('electron');
+			curr.innerHTML = 'v' + remote.app.getVersion();
+
+			ipcRenderer.on('check-game-version', () => {
+				update.innerHTML = "Checking game for update...";
+			})
+			ipcRenderer.on('new-game-version', (evt, info) => {
+				update.innerHTML = "New game version " + info.version + " found";
+				setTimeout(() => {
+					update.innerHTML = "Clearing cache...";
+				}, 1000)
+			})
+			ipcRenderer.on('same-game-version', () => {
+				update.innerHTML = "No game update found.";
+			})
+			ipcRenderer.on('checking-for-update', () => {
+				update.innerHTML = "Checking for update...";
+			});
+			ipcRenderer.on('update-available', (evt, info) => {
+				update.innerHTML = "New update v" + info.version + " found";
+			});
+			ipcRenderer.on('update-not-available', (evt, info) => {
+				update.innerHTML = "No update found.";
+			});
+			ipcRenderer.on('download-progress', (evt, info) => {
+				console.log(info);
+				update.innerHTML = "Downloading...";
+			});
+			ipcRenderer.on('update-downloaded', (evt, info) => {
+				update.innerHTML = "Installing v" + info.version;
+			});
+			ipcRenderer.on('update-error', (evt, info) => {
+				console.log(evt, info);
+				update.innerHTML = "Update failed. Try again next time";
+			});
+			ipcRenderer.on('log', console.log);
+		</script>
+	</body>
+</html>
