@@ -47,7 +47,7 @@
 		<script>
 			const { ipcRenderer, remote } = require('electron');
 			curr.innerHTML = 'v' + remote.app.getVersion();
-
+/*
 			ipcRenderer.on('check-game-version', () => {
 				update.innerHTML = "Checking game for update...";
 			})
@@ -79,6 +79,11 @@
 			ipcRenderer.on('update-error', (evt, info) => {
 				console.log(evt, info);
 				update.innerHTML = "Update failed. Try again next time";
+			});
+			*/
+			ipcRenderer.on('info', (evt, info) => {
+				console.log(evt, info);
+				update.innerHTML = info.msg;
 			});
 			ipcRenderer.on('log', console.log);
 		</script>

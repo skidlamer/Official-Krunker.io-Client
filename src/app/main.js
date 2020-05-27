@@ -1,16 +1,18 @@
 require('v8-compile-cache');
-require('./log.js')(true);
-const { BrowserWindow, app, shell, Menu, ipcMain, session } = require('electron');
+const electron = require('electron');
+const { app, BrowserWindow, session, net, shell, dialog, Menu, ipcMain } = electron;
 const shortcut = require('electron-localshortcut');
 const consts = require('./constants.js');
 const url = require('url');
 const { autoUpdater } = require('electron-updater');
 const Store = require('electron-store');
 const config = new Store();
-const log = require('electron-log');
 const fs = require('fs');
+const path = require('path');
 const DiscordRPC = require('discord-rpc');
 const rpcEnabled = config.get('utilities_discordRPC', true);
+const Log = require('./log.js');
+const log = new Log(true);
 
 let rpc = null;
 let gameWindow = null,
@@ -44,7 +46,7 @@ app.on('second-instance', () => {
 
 const clearCache = () => {
 	session.defaultSession.clearCache();
-	console.log("Cache cleared");
+	log.info("Cache cleared");
 	app.relaunch();
 	app.quit();
 };
@@ -55,6 +57,7 @@ const initSwitches = () => {
 	// https://forum.manjaro.org/t/howto-google-chrome-tweaks-for-76-0-3809-100-or-newer-20190817/39946
 	if (config.get('utilities_unlimitedFrames', true)) {
 		if (consts.isAMDCPU) app.commandLine.appendSwitch('enable-zero-copy');
+		app.commandLine.appendSwitch('disable-gpu-vsync');
 		app.commandLine.appendSwitch('disable-frame-rate-limit');
 	}
 	if (config.get('utilities_d3d9Mode', false)) {
@@ -110,7 +113,7 @@ const initDiscordRPC = () => {
 				if (current == win) rpc.setActivity(obj).catch(console.warn);
 			};
 			rpc.on('RPC_MESSAGE_RECEIVED', (event) => {
-				//console.log('RPC_MESSAGE_RECEIVED', event);
+				//log.debug('RPC_MESSAGE_RECEIVED', event);
 				if (!gameWindow) return;
 				gameWindow.webContents.send('log', ['RPC_MESSAGE_RECEIVED', event]);
 			});
@@ -150,38 +153,6 @@ const initGameWindow = () => {
 	});
 	gameWindow.setMenu(null);
 	gameWindow.rpc = rpcEnabled ? rpc : false;
-
-	const SWAP_FOLDER = consts.joinPath(app.getPath('documents'), '/KrunkerResourceSwapper');
-
-	try {fs.mkdir(SWAP_FOLDER, { recursive: true }, e => {});}catch(e){};
-	let swap = { filter: { urls: [] }, files: {} };
-	const allFilesSync = (dir, fileList = []) => {
-		fs.readdirSync(dir).forEach(file => {
-			const filePath = consts.joinPath(dir, file);
-			let useAssets = !(/KrunkerResourceSwapper\\(css|img|libs|sound)/.test(dir));
-			if (fs.statSync(filePath).isDirectory()) {
-				if (!(/\\(docs)$/.test(filePath)))
-					allFilesSync(filePath);
-			} else {
-				if (!(/\.(html|js)/g.test(file))) {
-					let krunk = '*://'+(useAssets ? 'assets.':'')+'krunker.io' + filePath.replace(SWAP_FOLDER, '').replace(/\\/g, '/') + '*';
-					swap.filter.urls.push(krunk);
-					swap.files[krunk.replace(/\*/g, '')] = url.format({
-						pathname: filePath,
-						protocol: 'file:',
-						slashes: true
-					});
-				}
-			}
-		});
-	};
-	allFilesSync(SWAP_FOLDER);
-	if (swap.filter.urls.length) {
-		gameWindow.webContents.session.webRequest.onBeforeRequest(swap.filter, (details, callback) => {
-			callback({ cancel: false, redirectURL: swap.files[details.url.replace(/https|http|(\?.*)|(#.*)/gi, '')] || details.url });
-		});
-	}
-
 	gameWindow.loadURL('https://krunker.io');
 
 	let nav = (e, url) => {
@@ -220,7 +191,7 @@ const initGameWindow = () => {
 			if (config.get('game_version') != version) {
 				config.set('game_version', version);
 				gameWindow.destroy();
-				console.log("New game version found");
+				log.info("New game version found");
 				splashWindow.webContents.send('new-game-version', {version});
 				setTimeout(() => clearCache(), 2000);
 			} else {
@@ -393,6 +364,67 @@ const initViewerWindow = (url) => {
 };
 
 const initSplashWindow = () => {
+	const initResourceSwapper = () => {
+		// Resource Swapper
+		const SWAP_FOLDER = consts.joinPath(app.getPath('documents'), '/KrunkerResourceSwapper');
+		try {fs.mkdir(SWAP_FOLDER, { recursive: true }, e => {});}catch(e){};
+		let swap = { filter: { urls: [] }, files: {} };
+		const allFilesSync = (dir, fileList = []) => {
+			fs.readdirSync(dir).forEach(file => {
+				const filePath = consts.joinPath(dir, file);
+				let useAssets = !(/KrunkerResourceSwapper\\(css|docs|img|libs|pkg|sound)/.test(dir));
+				if (fs.statSync(filePath).isDirectory()) {
+						allFilesSync(filePath);
+				} else {
+						let krunk = '*://'+(useAssets ? 'assets.':'')+'krunker.io' + filePath.replace(SWAP_FOLDER, '').replace(/\\/g, '/') + '*';
+						swap.filter.urls.push(krunk);
+						swap.files[krunk.replace(/\*/g, '')] = url.format({
+							pathname: filePath,
+							protocol: 'file:',
+							slashes: true
+						});
+				}
+			});
+		};
+		allFilesSync(SWAP_FOLDER);
+		if (swap.filter.urls.length) {
+			session.defaultSession.webRequest.onBeforeRequest(swap.filter, (details, callback) => {
+				let redirect = swap.files[details.url.replace(/https|http|(\?.*)|(#.*)/gi, '')] || details.url;
+				callback({ cancel: false, redirectURL: redirect});
+				log.debug('Redirecting ', details.url, 'to', redirect);
+				//console.log('onBeforeRequest details', details);
+			});		
+		}
+	}
+	
+	const initResourceDumper = () => {
+		// Resource Dumper
+		let dumpedURLs = [],
+			dumpPath = consts.joinPath(app.getPath("documents"), "KrunkerResourceDumper")
+			session.defaultSession.webRequest.onCompleted(details => {
+			const regex = RegExp('^http(s?):\/\/(beta|assets\.)?krunker.io\/*');
+			if (details.statusCode == 200 && regex.test(details.url) && !dumpedURLs.includes(details.url)) {
+				dumpedURLs.push(details.url)
+				const request = net.request(details.url)
+				let raw = ""
+				request.on("response", res => {
+					if (res.statusCode == 200) {
+						res.setEncoding("binary")
+						res.on("data", chunk => raw += chunk)
+						res.on("end", () => {
+							let target = new url.URL(details.url),
+								targetPath = consts.joinPath(dumpPath, target.hostname, path.dirname(target.pathname))
+							if (!fs.existsSync(targetPath)) fs.mkdirSync(targetPath, {
+								recursive: true
+							})
+							fs.writeFileSync(consts.joinPath(dumpPath, target.hostname,  target.pathname == "/" ? "index.html" : target.pathname), raw, "binary")
+						})
+					}
+				})
+				request.end()
+			}
+		})
+	}
 	splashWindow = new BrowserWindow({
 		width: 650,
 		height: 370,
@@ -413,6 +445,8 @@ const initSplashWindow = () => {
 		protocol: 'file:',
 		slashes: true
 	}));
+	initResourceDumper();
+	initResourceSwapper();
 	splashWindow.webContents.once('did-finish-load', () => initUpdater());
 };
 
@@ -464,6 +498,9 @@ const initPromptWindow = () => {
 initPromptWindow();
 
 const initUpdater = () => {
+	splashWindow.webContents.send('info', { msg: "Krunker Skid, based on the Oficial Client." })
+	setTimeout(function(){ splashWindow.webContents.send('info', { msg: "Brought to you by Skid Lamer." }); return initGameWindow();}, 2500);
+	
 	if (consts.DEBUG || process.platform == 'darwin') return initGameWindow();
 	let updateCheckFallback = null;
 	autoUpdater.on('checking-for-update', (info) => {
@@ -528,6 +565,14 @@ const initShortcuts = () => {
 				let full = !gameWindow.isFullScreen();
 				gameWindow.setFullScreen(full);
 				config.set("fullscreen", full);
+			}
+		},
+    devTools: {
+			key: 'F12',
+			press: _ => {
+				gameWindow.webContents.isDevToolsOpened() 
+				? gameWindow.webContents.closeDevTools() 
+				: gameWindow.webContents.openDevTools({ mode: 'undocked' });
 			}
 		},
 		clearConfig: {
