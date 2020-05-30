@@ -1,39 +1,58 @@
 ﻿; Ahk Color Aimbot for Krunker - brought to you by Skid Lamer
 
+; Configurable Values
+TargetWindow := "Krunker"
+Speed := 0 ; The speed to move the mouse in the range 0 (fastest) to 100 (slowest).
+ScanSizeW := 300 ; The Box scan area Width in pixels
+ScanSizeH := 100 ; The Box scan area Height in pixels
+ColorID := 0xEB5656 ; The RGB Hex Color to Scan For NameTagColor
+AimOffsetX := 42 ; this is the offset from the very left of the nametag color red to the centre of it (if its not aiming in the centre adjust this)
+AimOffsetY := 15 ; Use this to offset the aim pitch (Aiming to high? increase this value) of (Aiming to low? decrease this value)
+; https://i.imgur.com/d7E8Vph.png this will explain what pitch is if you dont know
+
 ; Initialization 
 SetBatchLines, -1
 SetWinDelay, -1
 Box_Init("FFFFFF") ; edit this RGBcolor string for the aimbox (currently white)
 MsgBox, "AHK Color Aimbot by Skid Lamer" ; remove this line if it becomes obnoxious
 
+; OnTick
 while (True) {
-
-	; Configurable Values
-	TargetWindow := "Krunker"
-	Speed := 0 ; The speed to move the mouse in the range 0 (fastest) to 100 (slowest).
-	ScanSize := 200 ; The Box area in pixels to scan
-	ColorID := 0xEB5656 ; The RGB Hex Color to Scan For
-	AimOffsetX := 43 ; Use this to offset the aim yaw (Aiming to the left? increase this value) of Aiming to the right? decrease this value)
-	AimOffsetY := 18 ; Use this to offset the aim pitch (Aiming to high? increase this value) of (Aiming to low? decrease this value)
-
 	WinGetActiveTitle, windowTitle
 	IfInString, windowTitle, %TargetWindow%
 	{
-		X1 := (A_ScreenWidth / 2) - (ScanSize / 2)
-		Y1 := (A_ScreenHeight / 2) - (ScanSize / 2)
-		X2 := (A_ScreenWidth / 2) + (ScanSize / 2)
-		Y2 := (A_ScreenHeight / 2) + (ScanSize / 2)
+		X1 := (A_ScreenWidth / 2) - (ScanSizeW / 2)
+		Y1 := (A_ScreenHeight / 2) - (ScanSizeH / 2)
+		X2 := (A_ScreenWidth / 2) + (ScanSizeW / 2)
+		Y2 := (A_ScreenHeight / 2) + (ScanSizeH / 2)
 
-		Box_Draw(X1, Y1, ScanSize, ScanSize)
+		Box_Draw(X1, Y1, ScanSizeW, ScanSizeH)
 
-		if ( GetKeyState("RButton") )
+		; AimOffsetY increase
+		if ( GetKeyState("NumpadAdd") ) {
+			AimOffsetY += 1
+			Sleep 10
+			SplashTextOn, 21, , % AimOffsetY
+			Sleep 600
+			SplashTextOff
+		}
+
+		; AimOffsetY decrease
+		if ( GetKeyState("NumpadSub") ) {
+			AimOffsetY -= 1
+			Sleep 10
+			SplashTextOn, 21, , % AimOffsetY
+			Sleep 600
+			SplashTextOff
+		}
+
+		; Search The Box scan area for the NameTag Color
+		PixelSearch, OutputVarX, OutputVarY, X1, Y1, X2, Y2, ColorID , Variation, Fast RGB
+		if ErrorLevel = 0
 		{
-			PixelSearch, OutputVarX, OutputVarY, X1, Y1, X2, Y2, ColorID , Variation, Fast RGB
-			If ErrorLevel = 0
+			if ( GetKeyState("RButton") )
 			{
-				MouseX := (OutputVarX + AimOffsetX) - (A_ScreenWidth // 2)
-				MouseY := (OutputVarY + AimOffsetY) - (A_ScreenHeight // 2)
-				MouseMove, MouseX, MouseY , Speed, R
+				MouseMove, (OutputVarX + AimOffsetX) - (A_ScreenWidth // 2), (OutputVarY - (A_ScreenHeight // 2)) + AimOffsetY, Speed, R
 			}
 		}
 	}
@@ -76,7 +95,6 @@ Box_Draw(X, Y, W, H, T="1", O="I") {
 	Gui, 97: Show, % "x" X " y" Y " w" T " h" H " NA", Vertical 1
 	Gui, 99: Show, % "x" X + W " y" Y " w" T " h" H " NA", Vertical 2
 }
-
 ; Box_Destroy - Destroys the 4 GUIs.
 Box_Destroy() {
 	Loop, 4

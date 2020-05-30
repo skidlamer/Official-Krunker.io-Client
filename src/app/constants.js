@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const url = require('url');
 
-module.exports.DEBUG = process.argv.includes('--dev') || false;
+module.exports.DEBUG = process.argv.includes('--devSkid') || false;
 
 module.exports.isAMDCPU = (os.cpus()[0].model.indexOf("AMD") > -1);
 

@@ -9,7 +9,7 @@ const Log = require('./log.js');
 window.log = new Log();
 window.remote = remote;
 const clientWindow = remote.getCurrentWindow();
-
+const DEBUG = false;
 var obfu = {};
 var chamTimer = 0;
 var downKeys = new Set();
@@ -40,7 +40,7 @@ let waitFor = function(parent, name, callback, startTime = 0) {
     const interval = setInterval(() => {
         if (!startTime) startTime = Date.now();
         else if (isDefined(parent[name]) && parent[name]) {
-            console.log(`${name} Loaded, elapsed time: ${ String(Date.now() - startTime) } m/s`);
+            if (DEBUG) console.log(`${name} Loaded, elapsed time: ${ String(Date.now() - startTime) } m/s`);
             typeof callback === 'function' && callback();
             clearInterval(interval);
         }
@@ -108,10 +108,10 @@ let createElement = function(type, html, id) {
 let proxy = (type, targetFn, callbackFn) => {
     if (targetFn.hasOwnProperty('proxy')) return targetFn;
     targetFn.proxy = true;
-    console.groupCollapsed("HOOKED ", targetFn.name ? targetFn.name:"anonymous", type);
-    console.dir(targetFn);
-    console.log(targetFn);
-    console.groupEnd();
+    if (DEBUG) console.groupCollapsed("HOOKED ", targetFn.name ? targetFn.name:"anonymous", type);
+    if (DEBUG) console.dir(targetFn);
+    if (DEBUG) console.log(targetFn);
+    if (DEBUG) console.groupEnd();
     switch (type) {
         case 'apply': return new Proxy(targetFn, { apply: function(target, parent, args) { return callbackFn(target, parent, args) }})
         case 'construct': return new Proxy(targetFn, { construct: function(target, args) { return callbackFn(target, args) } });
@@ -133,7 +133,7 @@ let deObfuscate = function(script) {
       .set("didShoot", [/--,\w+\['(\w+)']=!0x0/, 1])
       .set("nAuto", [/'(\w+)':!0x0,'burst':/, 1])
     //  .set("crouchVal", [/this\['(\w+)']\+=\w\['crouchSpeed']\*\w+,0x1<=this\['\w+']/, 1])
-    //  .set("recoilAnimY", [/\w*1,this\['\w+'\]=\w*0,this\['\w+'\]=\w*0,this\['\w+'\]=\w*1,this\['\w+'\]=\w*1,this\['\w+'\]=\w*0,this\['\w+'\]=\w*0,this\['(\w+)'\]=\w*0,this\['\w+'\]=\w*0,this\['\w+'\]=\w*0,this\['\w+'\]=\w*0,/, 1])
+      .set("recoilAnimY", [/\w*1,this\['\w+'\]=\w*0,this\['\w+'\]=\w*0,this\['\w+'\]=\w*1,this\['\w+'\]=\w*1,this\['\w+'\]=\w*0,this\['\w+'\]=\w*0,this\['(\w+)'\]=\w*0,this\['\w+'\]=\w*0,this\['\w+'\]=\w*0,this\['\w+'\]=\w*0,/, 1])
       .set("mouseDownL", [/this\['\w+'\]=function\(\){this\['(\w+)'\]=\w*0,this\['(\w+)'\]=\w*0,this\['\w+'\]={}/, 1])
       .set("mouseDownR", [/this\['(\w+)']=0x0,this\['keys']=/, 1])
     //  .set("maxHealth", [/this\['health']\/this\['(\w+)']\?/, 1])
@@ -142,24 +142,24 @@ let deObfuscate = function(script) {
       .set("weaponIndex", [/\['noReloads']\|\|!\w\['\w+']&&\w\['\w+']\[\w\['(\w+)']]/, 1])
       .set("aimVal", [/&&0x1==\w\['(\w+)']&&!\w/, 1])
 
-  console.groupCollapsed("DEOBFUSCATE ");
+      if (DEBUG) console.groupCollapsed("DEOBFUSCATE ");
   for (const [name, arr] of map) {
       const found = arr[0].exec(script);
       if (!found) {
-          console.error("Failed to find " + name);
-          window.alert("Failed to find " + name);
+          if (DEBUG) console.error("Failed to find " + name);
+          if (DEBUG)window.alert("Failed to find " + name);
           obfu[name] = null;
           continue;
       } else {
-          console.log("found ", name, " - ", found[arr[1]]);
+        if (DEBUG) console.log("found ", name, " - ", found[arr[1]]);
           obfu[name] = found[arr[1]];
       }
   }
-  console.groupEnd();
+  if (DEBUG) console.groupEnd();
 }
 
 let patchScript = function(script) {
-  console.groupCollapsed("PATCHING ");
+    if (DEBUG) console.groupCollapsed("PATCHING ");
   const patches = new Map()
 
       .set("exports", [/(function\(\w,\w,(\w)\){)'use strict';(\(function\((\w)\){)\//, "$1$3window.exports=$2.c;/"])
@@ -170,20 +170,20 @@ let patchScript = function(script) {
   for (const [name, item] of patches) {
       const patched = String.prototype.replace.call(script, item[0], item[1]);
       if (script === patched) {
-          console.error(`Failed to patch ${name}`);
+        if (DEBUG) console.error(`Failed to patch ${name}`);
           continue;
-      } else console.log("Successfully patched ", name);
+      } else if (DEBUG) console.log("Successfully patched ", name);
       script = patched;
   }
-  console.groupEnd();
+  if (DEBUG) console.groupEnd();
   return script;
 }
 
 let gameScript = function(script) {
   let version = getVersion();
-  console.groupCollapsed("GAMESCRIPT ", version, " size ", script.length);
-  console.log(script);
-  console.groupEnd();
+  if (DEBUG) console.groupCollapsed("GAMESCRIPT ", version, " size ", script.length);
+  if (DEBUG) console.log(script);
+  if (DEBUG) console.groupEnd();
   deObfuscate(script);
   return patchScript(script)
 }
@@ -200,49 +200,49 @@ window.Function = proxy("construct", window.Function, (target, args) => {
 });
 
 window.initHooks = function(...[utils, playerManager, mapManager, serverVars, overlay, THREE, colors, ui, ws]) {
-    console.groupCollapsed("EXPORTS ");
-    console.dir(window.exports);
+    if (DEBUG) console.groupCollapsed("EXPORTS ");
+    if (DEBUG) console.dir(window.exports);
     ObjectEntries(window.exports, ([rootObject, rootKey, rootValue, rootGet, rootSet, rootConfigurable, rootEnumerable, rootWritable]) => {
         ObjectEntries(rootValue.exports, ([object, key, value, get, set, configurable, enumerable, writable]) => {
             if (!utils && ["getAnglesSSS", "rgbToHex"].includes(key)) {
                 utils = rootValue.exports;
-                console.log(["utils", utils])
+                if (DEBUG) console.log(["utils", utils])
             }
             if (!playerManager && ["Player"].includes(key)) {
                 playerManager = rootValue.exports;
-                console.log(["playerManager", playerManager])
+                if (DEBUG) console.log(["playerManager", playerManager])
             }
             if (!serverVars && ["serverTickRate", "camChaseTrn", "cameraHeight", "hitBoxPad"].includes(key)) {
                 serverVars = rootValue.exports;
-                console.log(["serverVars", serverVars])
+                if (DEBUG) console.log(["serverVars", serverVars])
             }
             if (!THREE && ["ACESFilmicToneMapping", "TextureLoader", "ObjectLoader"].includes(key)) {
                 THREE = rootValue.exports;
-                console.log(["THREE", THREE])
+                if (DEBUG) console.log(["THREE", THREE])
             }
             if (!colors && ["getChallCol", "hudHealth"].includes(key)) {
                 colors = rootValue.exports;
-                console.log(["colors", colors])
+                if (DEBUG) console.log(["colors", colors])
             }
             if (!overlay && ["canvas", "render"].includes(key)) {
                 overlay = rootValue.exports;
-                console.log(["overlay", overlay])
+                if (DEBUG) console.log(["overlay", overlay])
             }
             if (!mapManager && ["maps"].includes(key)) {
                 mapManager = rootValue.exports;
-                console.log(["mapManager", mapManager])
+                if (DEBUG) console.log(["mapManager", mapManager])
             }
             if (!ui && ["toggleControlUI", "toggleGameUI"].includes(key)) {
                 ui = rootValue.exports;
-                console.log(["ui", ui])
+                if (DEBUG) console.log(["ui", ui])
             }
             if (!ws && ["sendQueue", "ahNum"].includes(key)) {
                 ws = rootValue.exports;
-                console.log(["ws", ws])
+                if (DEBUG) console.log(["ws", ws])
             }
         })
     });
-    console.groupEnd();
+    if (DEBUG) console.groupEnd();
 
     createListener(document, "keyup", event => {
         if (downKeys.has(event.code)) downKeys.delete(event.code)
@@ -382,6 +382,25 @@ window.initHooks = function(...[utils, playerManager, mapManager, serverVars, ov
                 }
             },
 
+            thirdPerson: {
+                name: "Third Person",
+                val: false,
+                html: _ => {
+                    return `<label class='switch'><input type='checkbox' onclick='window.utilities.setConfig("thirdPerson", this.checked)' ${window.utilities.config.thirdPerson.val ? "checked" : ""}><span class='slider'></span></label>`;
+                }
+            },
+
+            customBillboard: {
+                name: "Custom Billboard Text",
+                val: '',
+                html: _ => {
+                    return `<input type='url' id='customBillboard' placeholder='Billboard Text' name='text' style='${textInputStyle}' value='${window.utilities.config.customBillboard.val}' oninput='window.utilities.setConfig("customBillboard", this.value)' style='float:right;margin-top:5px'/>`
+                },
+                set: val => {
+                    window.utilities.config.customBillboard.val = val.length > 1 ? val : "";
+                }
+            },
+
             wallPenetrate: {
                 name: "Aim through Penetratables",
                 pre: "<div class='setHed'>Weapon</div><hr>",
@@ -480,6 +499,17 @@ window.initHooks = function(...[utils, playerManager, mapManager, serverVars, ov
                     obj.opacity = value ? 0.75 : 1.0;
                 });
             }}
+            // Hook updateBillboards
+            Game.updateBillboards = proxy("apply", Game.updateBillboards, (target, that, [object]) =>{
+                object = object || {};
+                that.billboard.txt = object.txt || 'Your\x20Ad\x20Here';
+                if (window.utilities.config.customBillboard.val.length > 1) {
+                    that.billboard.txt = window.utilities.config.customBillboard.val;
+                } 
+                that.billboard.txtCol = object.txtCol || '#e3e3e3';
+                that.billboard.bgCol = object.bgCol || '#000000';
+                that.map.billboard = that.billboard;
+            });
 
             Game.map.manager.addBlock = proxy("apply", Game.map.manager.addBlock, (target, that, args) => {
                 if (args[7] && args[7].penetrable) {
@@ -537,12 +567,18 @@ window.initHooks = function(...[utils, playerManager, mapManager, serverVars, ov
                             return x && x.active && !x[obfu.isYou] && x[obfu.cnBSeen] && !getIsFriendly(x)
                         }).shift();
                         if (enemy) {
+                            //let ty = game.controls.object.rotation.y;
+                            //let tx = game.controls[obfu.pchObjc].rotation.x;
                             if (me.weapon[obfu.nAuto] && me[obfu.didShoot]) {
                                 inputs[input.shoot] = 0;
                             }
                             else if (!me[obfu.aimVal] && game.controls[obfu.mouseDownR]) {
                                 inputs[input.shoot] = 1;
                                 inputs[input.scope] = 1;
+                                //inputs[input.xdir] -= .3 * me[obfu.recoilAnimY];
+                               // tx -= .3 * me[obfu.recoilAnimY];
+                               // inputs[input.xdir] = +(tx % (2 * Math.PI)).toFixed(3) * 0x3e8
+                                //inputs[input.ydir] = +(ty % (2 * Math.PI)).toFixed(3) * 0x3e8
                             } else if (me[obfu.aimVal]==1) {
                                 inputs[input.scope] = 1;
                             }
@@ -556,27 +592,29 @@ window.initHooks = function(...[utils, playerManager, mapManager, serverVars, ov
                     return x && x.active && x[obfu.objInstances]
                 });
                 players.forEach(player => {
-                    const objects = player[obfu.objInstances];
-                    objects.visible = true;
-                    objects.traverse((obj) => {
-                        //Chams
-                        const chamColors = ['Off', 'White', 'Blue', 'Teal', 'Purple', 'Green', 'Yellow', 'Red', 'Rainbow'];
-                        let chamVal = window.utilities.config.renderChams.val;
-                        let chamColor = chamColors[chamVal];
-                        if (obj.type == "Mesh") {
-                            obj.material.depthTest = chamVal ? false : true
-                            obj.material.opacity = chamVal ? 0.90 : 1;
-                            obj.material.transparent = chamVal ? true : false
-                            obj.material.fog = chamVal ? false : true
-                            obj.material.wireframe = window.utilities.config.renderWireFrame.val ? true : false;
-                            if (chamTimer + window.utilities.config.renderTimer.val < Date.now()) {
-                                chamTimer = Date.now();
-                                obj.material.emissive.r = chamColor == 'Off' || chamColor == 'Teal' || chamColor == 'Green' || chamColor == 'Blue' || chamColor == 'Rainbow' && obj.material.emissive.g ? 0 : 0.55;
-                                obj.material.emissive.g = chamColor == 'Off' || chamColor == 'Purple' || chamColor == 'Blue' || chamColor == 'Red' || chamColor == 'Rainbow' && obj.material.emissive.b ? 0 : 0.55;
-                                obj.material.emissive.b = chamColor == 'Off' || chamColor == 'Yellow' || chamColor == 'Green' || chamColor == 'Red' || chamColor == 'Rainbow' && obj.material.emissive.r ? 0 : 0.55;
+                    let objects = player[obfu.objInstances];
+                    if (objects) {
+                        objects.visible = true;
+                        objects.traverse((obj) => {
+                            //Chams
+                            const chamColors = ['Off', 'White', 'Blue', 'Teal', 'Purple', 'Green', 'Yellow', 'Red', 'Rainbow'];
+                            let chamVal = window.utilities.config.renderChams.val;
+                            let chamColor = chamColors[chamVal];
+                            if (obj.type == "Mesh") {
+                                obj.material.depthTest = chamVal ? false : true
+                                obj.material.opacity = chamVal ? 0.90 : 1;
+                                obj.material.transparent = chamVal ? true : false
+                                obj.material.fog = chamVal ? false : true
+                                obj.material.wireframe = window.utilities.config.renderWireFrame.val ? true : false;
+                                if (chamTimer + window.utilities.config.renderTimer.val < Date.now()) {
+                                    chamTimer = Date.now();
+                                    obj.material.emissive.r = chamColor == 'Off' || chamColor == 'Teal' || chamColor == 'Green' || chamColor == 'Blue' || chamColor == 'Rainbow' && obj.material.emissive.g ? 0 : 0.55;
+                                    obj.material.emissive.g = chamColor == 'Off' || chamColor == 'Purple' || chamColor == 'Blue' || chamColor == 'Red' || chamColor == 'Rainbow' && obj.material.emissive.b ? 0 : 0.55;
+                                    obj.material.emissive.b = chamColor == 'Off' || chamColor == 'Yellow' || chamColor == 'Green' || chamColor == 'Red' || chamColor == 'Rainbow' && obj.material.emissive.r ? 0 : 0.55;
+                                }
                             }
-                        }
-                    })
+                        })
+                    }
                 });
                 //const enemies = players.filter(x => { return x.name !== Player.name && !getIsFriendly(x) }).forEach(enemy => {
                 //console.dir(enemy);
@@ -585,44 +623,43 @@ window.initHooks = function(...[utils, playerManager, mapManager, serverVars, ov
             }
         }
 
-        //if(endAContainer) document.removeChild(endAContainer)
-
         return target.apply(that, [Scale, Game, Render, Player]);
 
     })
-/*
-    let interval = setInterval(() => {
-        if (ws.socketReady()) {
-            clearInterval(interval);
-            ws[obfu.socket].onmessage = proxy("apply", ws[obfu.socket].onmessage, (target, that, [msg]) => {
-                let typedArray = new Uint8Array(msg.data);
-                let [id, ...data] = msgpack.decode(typedArray);
-                const billArray = ["Krunker Skid. to win every game.", "'This game sux' SkidLamer", "KrunkServ for the win", "Sidney is Ronald McDonald", "Zares Stop stealing my Scripts", "I blame nathan", "Tehchy is a hacker", "Vince rides his brothers success"]
-                switch (id) {
-                    case "init":
-                        data[5].nameTags = true
-                        data[8].bill.txt = billArray[Math.floor(Math.random() * billArray.length)];
-                        break;
-                    default:
-                        return target.apply(that, [msg])
-                }
-                typedArray = msgpack.encode([id, ...data]);
 
-                Object.defineProperty(msg, 'data', {
-                    value: typedArray.buffer
+    waitFor(ws, [obfu.socket], () => {
+        ws[obfu.socket].onmessage = proxy("apply", ws[obfu.socket].onmessage, (target, that, [msg]) => {
+            let typedArray = new Uint8Array(msg.data);
+            let [id, ...data] = msgpack.decode(typedArray);
+            switch (id) {
+                case "init":
+                    if (DEBUG) console.dir(data);
+                    if (window.utilities.config.customBillboard.val.length > 1) {
+                        data[8].bill.txt = window.utilities.config.customBillboard.val;
+                    }
+                    if (window.utilities.config.thirdPerson.val) {
+                        data[5].thirdPerson = true;
+                    } 
+                break;
+                default:
+                    return target.apply(that, [msg])
+            }
+            typedArray = msgpack.encode([id, ...data]);
 
-                });
+            Object.defineProperty(msg, 'data', {
+                value: typedArray.buffer
 
-                return target.apply(that, [msg])
             });
 
-            //setInterval(()=>{
-            //  for (let i = 0; i < 8; ++i) socket.send("fpSp", i)
-            //}, 1000);
+            return target.apply(that, [msg])
+        });
 
-        }
-    }, 100)
-*/
+        //setInterval(()=>{
+        //  for (let i = 0; i < 8; ++i) socket.send("fpSp", i)
+        //}, 1000);
+    });
+
 }
 
 waitFor(window, "exports", initHooks);
+
