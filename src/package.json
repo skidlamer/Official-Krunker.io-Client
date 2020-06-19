@@ -25,16 +25,17 @@
       }
    },
    "devDependencies": {
-      "electron": "^6.0.0",
+      "electron": "^9.0.0",
       "electron-builder": "^22.6.1"
    },
    "dependencies": {
-      "msgpack-lite": "^0.1.26",
+      "bytenode": "^1.1.6",
       "discord-rpc": "^3.1.0",
       "electron-localshortcut": "^3.2.1",
-      "electron-log": "^4.1.0",
+      "electron-log": "^4.2.0",
       "electron-store": "^5.1.1",
       "electron-updater": "^4.2.2",
+      "msgpack-lite": "^0.1.26",
       "rimraf": "^3.0.1",
       "v8": "^0.1.0",
       "bytenode": "^1.1.6",
