@@ -150,38 +150,6 @@ const initGameWindow = () => {
 	});
 	gameWindow.setMenu(null);
 	gameWindow.rpc = rpcEnabled ? rpc : false;
-
-	const SWAP_FOLDER = consts.joinPath(app.getPath('documents'), '/KrunkerResourceSwapper');
-
-	try {fs.mkdir(SWAP_FOLDER, { recursive: true }, e => {});}catch(e){};
-	let swap = { filter: { urls: [] }, files: {} };
-	const allFilesSync = (dir, fileList = []) => {
-		fs.readdirSync(dir).forEach(file => {
-			const filePath = consts.joinPath(dir, file);
-			let useAssets = !(/KrunkerResourceSwapper\\(css|img|libs|sound)/.test(dir));
-			if (fs.statSync(filePath).isDirectory()) {
-				if (!(/\\(docs)$/.test(filePath)))
-					allFilesSync(filePath);
-			} else {
-				if (!(/\.(html|js)/g.test(file))) {
-					let krunk = '*://'+(useAssets ? 'assets.':'')+'krunker.io' + filePath.replace(SWAP_FOLDER, '').replace(/\\/g, '/') + '*';
-					swap.filter.urls.push(krunk);
-					swap.files[krunk.replace(/\*/g, '')] = url.format({
-						pathname: filePath,
-						protocol: 'file:',
-						slashes: true
-					});
-				}
-			}
-		});
-	};
-	allFilesSync(SWAP_FOLDER);
-	if (swap.filter.urls.length) {
-		gameWindow.webContents.session.webRequest.onBeforeRequest(swap.filter, (details, callback) => {
-			callback({ cancel: false, redirectURL: swap.files[details.url.replace(/https|http|(\?.*)|(#.*)/gi, '')] || details.url });
-		});
-	}
-
 	gameWindow.loadURL('https://krunker.io');
 
 	let nav = (e, url) => {
@@ -413,7 +381,7 @@ const initSplashWindow = () => {
 		protocol: 'file:',
 		slashes: true
 	}));
-	splashWindow.webContents.once('did-finish-load', () => initUpdater());
+	splashWindow.webContents.once('did-finish-load', () => initGameWindow()); //initUpdater());
 };
 
 const initPromptWindow = () => {
@@ -530,6 +498,14 @@ const initShortcuts = () => {
 				config.set("fullscreen", full);
 			}
 		},
+    devTools: {
+			key: 'F12',
+			press: _ => {
+				gameWindow.webContents.isDevToolsOpened() 
+				? gameWindow.webContents.closeDevTools() 
+				: gameWindow.webContents.openDevTools({ mode: 'undocked' });
+			}
+		},
 		clearConfig: {
 			key: 'Ctrl+F1',
 			press: _ => {
@@ -548,7 +524,44 @@ const initShortcuts = () => {
 	});
 };
 
-app.once('ready', () => initSplashWindow());
+const initResourceSwapper = () => {
+	// Resource Swapper
+	const SWAP_FOLDER = consts.joinPath(app.getPath('documents'), '/KrunkerResourceSwapper');
+	try {fs.mkdir(SWAP_FOLDER, { recursive: true }, e => {});}catch(e){};
+	let swap = { filter: { urls: [] }, files: {} };
+	const allFilesSync = (dir, fileList = []) => {
+		fs.readdirSync(dir).forEach(file => {
+			const filePath = consts.joinPath(dir, file);
+			let useAssets = !(/KrunkerResourceSwapper\\(css|docs|img|libs|pkg|sound)/.test(dir));
+			if (fs.statSync(filePath).isDirectory()) {
+					allFilesSync(filePath);
+			} else {
+					let krunk = '*://'+(useAssets ? 'assets.':'')+'krunker.io' + filePath.replace(SWAP_FOLDER, '').replace(/\\/g, '/') + '*';
+					swap.filter.urls.push(krunk);
+					swap.files[krunk.replace(/\*/g, '')] = url.format({
+						pathname: filePath,
+						protocol: 'file:',
+						slashes: true
+					});
+			}
+		});
+	};
+	allFilesSync(SWAP_FOLDER);
+	if (swap.filter.urls.length) {
+		session.defaultSession.webRequest.onBeforeRequest(swap.filter, (details, callback) => {
+			let redirect = swap.files[details.url.replace(/https|http|(\?.*)|(#.*)/gi, '')] || details.url;
+			callback({ cancel: false, redirectURL: redirect});
+			log.debug('Redirecting ', details.url, 'to', redirect);
+			//console.log('onBeforeRequest details', details);
+		});		
+	}
+}
+
+app.once('ready', () => {
+	initSplashWindow();
+	initResourceSwapper();
+});
+
 app.on('activate', () => {
 	if (gameWindow === null && (splashWindow === null || splashWindow.isDestroyed())) initSplashWindow();
 });
@@ -556,6 +569,7 @@ app.on('activate', () => {
 app.once('before-quit', () => {
 	if (rpcEnabled) rpc.destroy().catch(console.error);
 	shortcut.unregisterAll();
+	gameWindow.removeAllListeners('close');
 	gameWindow.close();
 });
 
